@@ -40,7 +40,7 @@ public class DAO {
 
                     long carId = resultSet.getLong("car_id");
 
-                    if (carId != 0) {
+                    if (!resultSet.wasNull()) {
                         cars.add(new Car(
                                 carId,
                                 resultSet.getString("model")
