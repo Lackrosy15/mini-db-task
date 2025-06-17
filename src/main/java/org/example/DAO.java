@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 
 public class DAO {
@@ -56,9 +57,50 @@ public class DAO {
     }
 
     public List<Human> findAllHumans() {
-        List<Human> allHumans = new ArrayList<>();
+        String sql = "SELECT h.id, h.name, h.age, c.id as car_id, c.model FROM humans h LEFT JOIN cars_humans_association cha ON h.id = cha.human_id LEFT JOIN cars c ON cha.car_id = c.id;";
 
+        try (Connection connection = DriverManager.getConnection(
+                properties.getProperty("db-url"),
+                properties.getProperty("username"),
+                properties.getProperty("password"));
+             PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
 
-        return allHumans;
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+
+                List<Human> allHumans = new ArrayList<>();
+
+                while (resultSet.next()) {
+                    long currentHumanId = resultSet.getLong("id");
+
+                    Optional human = allHumans.stream().filter(h -> h.getHuman_id() == currentHumanId)
+                            .findFirst()
+                            .map(human1 -> {
+                                try {
+                                    return human1.getCars().add(new Car(resultSet.getLong("car_id"), resultSet.getString("model")));
+                                } catch (SQLException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            });
+
+                    if (!human.isPresent()) {
+                        List<Car> humanCars = new ArrayList<>();
+                        long carId = resultSet.getLong("car_id");
+                        if (!resultSet.wasNull()) {
+                            humanCars.add(new Car(carId, resultSet.getString("model")));
+                        }
+                        allHumans.add(new Human(currentHumanId, resultSet.getString("name"), resultSet.getInt("age"), humanCars));
+                    }
+                }
+                System.out.println(allHumans);
+                return allHumans;
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
+
+
+
+
+
