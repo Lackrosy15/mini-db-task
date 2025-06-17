@@ -31,9 +31,13 @@ public class DAO {
             List<Car> cars = new ArrayList<>();
 
             while (resultSet.next()) {
-                long humanId = resultSet.getLong("id");
-                String humanName = resultSet.getString("name");
-                int humanAge = resultSet.getInt("age");
+
+                if (human == null) {
+                    long humanId = resultSet.getLong("id");
+                    String humanName = resultSet.getString("name");
+                    int humanAge = resultSet.getInt("age");
+                    human = new Human(humanId, humanName, humanAge, cars);
+                }
 
                 long carId = resultSet.getLong("car_id");
                 String carModel = resultSet.getString("model");
@@ -42,9 +46,6 @@ public class DAO {
                     cars.add(new Car(carId, carModel));
                 }
 
-                if (human == null) {
-                    human = new Human(humanId, humanName, humanAge, cars);
-                }
 
             }
             System.out.println(human);
