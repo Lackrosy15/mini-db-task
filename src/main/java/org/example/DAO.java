@@ -5,10 +5,8 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.Properties;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class DAO {
     Properties properties;
@@ -19,7 +17,7 @@ public class DAO {
     }
 
     public Human findHumanInfoByHumanId(long id) throws SQLException {
-        String sql = "SELECT h.id, h.name, h.age, c.id AS car_id, c.model FROM humans h LEFT JOIN cars_humans_association cha ON h.id = cha.human_id LEFT JOIN cars c ON cha.car_id = c.id WHERE h.id = ?;";
+        String sql = "SELECT h.id AS human_id, h.name, h.age, c.id AS car_id, c.model FROM humans h FULL JOIN cars c ON h.id = c.human_id WHERE h.id = ?;";
 
         try (Connection connection = DriverManager.getConnection(
                 properties.getProperty("db-url"),
@@ -33,19 +31,21 @@ public class DAO {
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
                 Human human = null;
                 List<Car> cars = new ArrayList<>();
+                Long humanId = null;
+                String humanName = null;
+                Integer humanAge = null;
 
                 while (resultSet.next()) {
                     if (human == null) {
-                        human = new Human(resultSet.getLong("id"), resultSet.getString("name"), resultSet.getInt("age"), cars);
+                        humanId = resultSet.getLong("human_id");
+                        humanName = resultSet.getString("name");
+                        humanAge = resultSet.getInt("age");
+                        human = new Human(humanId, humanName, humanAge, cars);
                     }
-
-                    long carId = resultSet.getLong("car_id");
+                    long car_id = resultSet.getLong("car_id");
 
                     if (!resultSet.wasNull()) {
-                        cars.add(new Car(
-                                carId,
-                                resultSet.getString("model")
-                        ));
+                        cars.add(new Car(car_id, resultSet.getString("model"), humanId));
                     }
                 }
                 System.out.println(human);
@@ -56,8 +56,8 @@ public class DAO {
         }
     }
 
-    public List<Human> findAllHumans() {
-        String sql = "SELECT h.id, h.name, h.age, c.id as car_id, c.model FROM humans h LEFT JOIN cars_humans_association cha ON h.id = cha.human_id LEFT JOIN cars c ON cha.car_id = c.id;";
+    public Collection<Human> findAllHumans() {
+        String sql = "SELECT h.id AS human_id, h.name, h.age, c.id AS car_id, c.model FROM humans h FULL JOIN cars c ON h.id = c.human_id;";
 
         try (Connection connection = DriverManager.getConnection(
                 properties.getProperty("db-url"),
@@ -65,34 +65,34 @@ public class DAO {
                 properties.getProperty("password"));
              PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
 
+            HashMap<Long, Human> map = new HashMap<>();
+
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
 
-                List<Human> allHumans = new ArrayList<>();
-
                 while (resultSet.next()) {
-                    long currentHumanId = resultSet.getLong("id");
+                    Long humanId = resultSet.getLong("human_id");
+                    String humanName = resultSet.getString("name");
+                    Integer humanAge = resultSet.getInt("age");
 
-                    Optional human = allHumans.stream().filter(h -> h.getHuman_id() == currentHumanId)
-                            .findFirst()
-                            .map(human1 -> {
-                                try {
-                                    return human1.getCars().add(new Car(resultSet.getLong("car_id"), resultSet.getString("model")));
-                                } catch (SQLException e) {
-                                    throw new RuntimeException(e);
-                                }
-                            });
+                    Long carId = resultSet.getLong("car_id");
+                    String model = resultSet.getString("model");
 
-                    if (!human.isPresent()) {
-                        List<Car> humanCars = new ArrayList<>();
-                        long carId = resultSet.getLong("car_id");
-                        if (!resultSet.wasNull()) {
-                            humanCars.add(new Car(carId, resultSet.getString("model")));
+                    Human human = map.get(humanId);
+
+                    if (human == null) {
+                        List<Car> cars = new ArrayList<>();
+                        if (model != null) {
+                            cars.add(new Car(carId, model, humanId));
                         }
-                        allHumans.add(new Human(currentHumanId, resultSet.getString("name"), resultSet.getInt("age"), humanCars));
+                        map.put(humanId, new Human(humanId, humanName, humanAge, cars));
+                    } else {
+                        human.getCars().add(new Car(carId, model, humanId));
                     }
                 }
-                System.out.println(allHumans);
-                return allHumans;
+
+                System.out.println(map.values());
+                return map.values();
+
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
